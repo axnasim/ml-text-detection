@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Upload, X } from 'lucide-react';
 
 interface ImageUploaderProps {
@@ -12,8 +12,38 @@ export default function ImageUploader({ onImageSelect, disabled }: ImageUploader
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = (file: File) => {
+    // Validate file type
     if (!file.type.startsWith('image/')) {
       alert('Please select an image file');
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+    if (file.size > maxSize) {
+      alert('File size must be less than 10MB');
+      return;
+    }
+
+    // Validate specific image formats for security
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type.toLowerCase())) {
+      alert('Only JPEG, PNG, GIF, and WebP images are allowed');
+      return;
+    }
+
+    // Additional validation: check file extension matches MIME type
+    const fileExtension = file.name.toLowerCase().split('.').pop();
+    const validExtensions: { [key: string]: string[] } = {
+      'image/jpeg': ['jpg', 'jpeg'],
+      'image/png': ['png'],
+      'image/gif': ['gif'],
+      'image/webp': ['webp']
+    };
+
+    const expectedExtensions = validExtensions[file.type.toLowerCase()];
+    if (!expectedExtensions || !fileExtension || !expectedExtensions.includes(fileExtension)) {
+      alert('File extension does not match the file type');
       return;
     }
 
@@ -23,6 +53,11 @@ export default function ImageUploader({ onImageSelect, disabled }: ImageUploader
       setPreview(result);
       onImageSelect(result, file);
     };
+    
+    reader.onerror = () => {
+      alert('Error reading file. Please try again.');
+    };
+    
     reader.readAsDataURL(file);
   };
 
@@ -59,11 +94,25 @@ export default function ImageUploader({ onImageSelect, disabled }: ImageUploader
   };
 
   const clearImage = () => {
+    // Clean up memory by revoking object URL if it exists
+    if (preview && preview.startsWith('blob:')) {
+      URL.revokeObjectURL(preview);
+    }
+    
     setPreview(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
+
+  // Cleanup on component unmount
+  useEffect(() => {
+    return () => {
+      if (preview && preview.startsWith('blob:')) {
+        URL.revokeObjectURL(preview);
+      }
+    };
+  }, [preview]);
 
   return (
     <div className="w-full">
