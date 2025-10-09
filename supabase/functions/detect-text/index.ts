@@ -41,6 +41,43 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Validate job exists and is pending before processing
+    const { data: job, error: jobFetchError } = await supabase
+      .from("detection_jobs")
+      .select("id,status")
+      .eq("id", jobId)
+      .maybeSingle();
+
+    if (jobFetchError) {
+      return new Response(
+        JSON.stringify({ error: `Failed to fetch job: ${jobFetchError.message}` }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    if (!job) {
+      return new Response(
+        JSON.stringify({ error: "Job not found" }),
+        {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    if (job.status !== "pending") {
+      return new Response(
+        JSON.stringify({ error: `Job is not pending (current status: ${job.status})` }),
+        {
+          status: 409,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     // Update job status to processing
     await supabase
       .from("detection_jobs")
@@ -133,33 +170,42 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Store detected text in database
-    const detectedTexts = [];
-    
-    // First annotation is the full text, skip it and process individual words/phrases
-    for (let i = 0; i < textAnnotations.length; i++) {
-      const annotation = textAnnotations[i];
-      const boundingBox = annotation.boundingPoly?.vertices || null;
-      
-      const detectionData = {
+    // Store detected text in database (bulk insert for performance)
+    const detectedTextsPayload = textAnnotations.map((annotation: any) => {
+      const boundingBox = annotation.boundingPoly?.vertices ?? null;
+      return {
         job_id: jobId,
         text_content: annotation.description,
-        confidence: annotation.confidence || 0.95, // GCP doesn't always provide confidence for text
-        bounding_box: boundingBox ? JSON.stringify(boundingBox) : null,
-        language: annotation.locale || null,
+        confidence: typeof annotation.confidence === "number" ? annotation.confidence : 0.95,
+        // Store as proper JSON in jsonb column (no stringify)
+        bounding_box: boundingBox,
+        language: annotation.locale ?? null,
       };
+    });
 
-      const { data, error } = await supabase
-        .from("detected_text")
-        .insert(detectionData)
-        .select()
-        .single();
+    const { data: insertedDetections, error: insertError } = await supabase
+      .from("detected_text")
+      .insert(detectedTextsPayload)
+      .select();
 
-      if (error) {
-        console.error("Error inserting detected text:", error);
-      } else {
-        detectedTexts.push(data);
-      }
+    if (insertError) {
+      // Mark job as failed on insert error
+      await supabase
+        .from("detection_jobs")
+        .update({
+          status: "failed",
+          error_message: `Failed to store detections: ${insertError.message}`,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", jobId);
+
+      return new Response(
+        JSON.stringify({ error: `Failed to store detections: ${insertError.message}` }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     // Update job status to completed
@@ -174,8 +220,8 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: `Detected ${detectedTexts.length} text elements`,
-        detections: detectedTexts
+        message: `Detected ${insertedDetections?.length ?? 0} text elements`,
+        detections: insertedDetections ?? []
       }),
       {
         status: 200,
@@ -185,7 +231,30 @@ Deno.serve(async (req: Request) => {
 
   } catch (error) {
     console.error("Error in detect-text function:", error);
-    
+    // Attempt to mark job as failed if we have jobId
+    try {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL");
+      const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      if (supabaseUrl && supabaseServiceKey) {
+        const admin = createClient(supabaseUrl, supabaseServiceKey);
+        const bodyText = await req.text().catch(() => null);
+        const parsed = bodyText ? JSON.parse(bodyText) as Partial<DetectionRequest> : null;
+        const failedJobId = parsed?.jobId;
+        if (failedJobId) {
+          await admin
+            .from("detection_jobs")
+            .update({
+              status: "failed",
+              error_message: error instanceof Error ? error.message : "Unknown error occurred",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", failedJobId);
+        }
+      }
+    } catch (_) {
+      // best-effort; ignore secondary failures
+    }
+
     return new Response(
       JSON.stringify({ 
         error: error instanceof Error ? error.message : "Unknown error occurred"
