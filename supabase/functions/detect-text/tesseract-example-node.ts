@@ -54,7 +54,7 @@ async function cleanupFile(filePath: string): Promise<void> {
   }
 }
 
-app.post('/detect', async (req: Request, res: Response) => {
+app.post('/detect', async (req: any, res: any) => {
   let imagePath = '';
   let cleanupRequired = false;
   
@@ -67,7 +67,7 @@ app.post('/detect', async (req: Request, res: Response) => {
 
     // Ensure temp directory exists
     const tmpDir = ensureTempDir();
-    imagePath = path.join(tmpDir, `ocr-${Date.now()}.png`);
+    imagePath = path.join(tmpDir, `ocr-${Date.now()}-${Math.random().toString(36).substring(7)}.png`);
     cleanupRequired = true;
     
     let imageBuffer: Buffer;
@@ -101,14 +101,18 @@ app.post('/detect', async (req: Request, res: Response) => {
     // Clean up the temp file
     if (cleanupRequired) {
       await cleanupFile(imagePath);
+      cleanupRequired = false;
     }
     
-    return res.json({ text: ocrResult });
-  } catch (error) {
+    return res.json({ 
+      success: true,
+      text: ocrResult 
+    });
+  } catch (error: any) {
     console.error('Error:', error);
     
     // Clean up temp file on error
-    if (cleanupRequired) {
+    if (cleanupRequired && imagePath) {
       await cleanupFile(imagePath);
     }
     
@@ -119,234 +123,25 @@ app.post('/detect', async (req: Request, res: Response) => {
   }
 });
 
-// Start the server
-const listenPort = process.env.PORT ? Number(process.env.PORT) : 3000;
-
-app.listen(listenPort, () => {
-  console.log(`Server running on port ${listenPort}`);
-});
-
-// Handle cleanup on exit
-process.on('SIGINT', () => {
-  console.log('\nShutting down...');
-  process.exit(0);
-});
-    
-    // Process the image
-    console.log('Processing image...');
-    const ocrResult = await tesseract.recognize(imagePath, config);
-    console.log('Recognition complete');
-    
-    // Clean up the temp file
-    if (cleanupRequired && fs.existsSync(imagePath)) {
-      await unlink(imagePath);
-      cleanupRequired = false;
-    }
-    
-    return res.json({ text: ocrResult });
-  } catch (error) {
-    console.error('Error:', error);
-    
-    // Clean up temp file on error
-    if (cleanupRequired && fs.existsSync(imagePath)) {
-      try {
-        await unlink(imagePath);
-      } catch (cleanupError) {
-        console.error('Error cleaning up temp file:', cleanupError);
-      }
-    }
-    
-    return res.status(500).json({
-      error: error instanceof Error ? error.message : 'An error occurred during text detection',
-      details: error instanceof Error ? error.stack : undefined
-    });
-  }
+// Health check endpoint
+app.get('/health', (req: any, res: any) => {
+  res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
 // Start the server
-const listenPort = process.env.PORT ? Number(process.env.PORT) : 3000;
-
-app.listen(listenPort, () => {
-  console.log(`Server running on port ${listenPort}`);
-});
-
-// Handle cleanup on exit
-process.on('SIGINT', () => {
-  console.log('\nShutting down...');
-  process.exit(0);
-});
-    
-  } catch (error) {
-    console.error('Error:', error);
-    
-    // Clean up temp file on error
-    if (cleanupRequired && fs.existsSync(imagePath)) {
-      try {
-        await unlink(imagePath);
-      } catch (cleanupError) {
-        console.error('Error cleaning up temp file:', cleanupError);
-      }
-    }
-    
-    return res.status(500).json({
-      error: error instanceof Error ? error.message : 'An error occurred during text detection',
-      details: error instanceof Error ? error.stack : undefined
-    });
-  }
-});
-
-// Start the server
-const serverPort = process.env.PORT ? Number(process.env.PORT) : 3000;
-
-app.listen(serverPort, () => {
-  console.log(`Server running on port ${serverPort}`);
-});
-
-// Handle cleanup on exit
-process.on('SIGINT', () => {
-  console.log('\nShutting down...');
-  process.exit(0);
-    }
-
-    console.log('Processing image...');
-    const text = await tesseract.recognize(imagePath, config);
-    console.log('Recognition complete');
-
-    // Clean up temp file
-    if (fs.existsSync(imagePath)) {
-      await unlink(imagePath);
-    }
-
-    return res.json({ text });
-  } catch (error: any) {
-    console.error('Error:', error);
-    
-    // Clean up temp file on error
-    if (imagePath && fs.existsSync(imagePath)) {
-      try {
-        await unlink(imagePath);
-      } catch (cleanupError) {
-        console.error('Error cleaning up temp file:', cleanupError);
-      }
-    }
-
-    return res.status(500).json({ 
-      error: error.message || 'An error occurred during text detection',
-      details: error.stack
-    });
-  }
-});
-
-// Start the server
-const serverPort = process.env.PORT ? Number(process.env.PORT) : 3000;
-
-app.listen(serverPort, () => {
-  console.log(`Server running on port ${serverPort}`);
-});
-
-// Handle cleanup on exit
-process.on('SIGINT', () => {
-  console.log('\nShutting down...');
-  process.exit(0);
-});
-    }
-
-    console.log('Processing image...');
-    const text = await tesseract.recognize(imagePath, config);
-    console.log('Recognition complete');
-
-    // Clean up temp file
-    if (imagePath && fs.existsSync(imagePath)) {
-      await unlink(imagePath);
-    }
-
-    return res.json({ text });
-  } catch (error: any) {
-    console.error('Error:', error);
-    
-    // Clean up temp file on error
-    if (imagePath && fs.existsSync(imagePath)) {
-      try {
-        await unlink(imagePath);
-      } catch (cleanupError) {
-        console.error('Error cleaning up temp file:', cleanupError);
-      }
-    }
-
-    return res.status(500).json({ 
-      error: error.message || 'An error occurred during text detection',
-      details: error.stack
-    });
-  }
-});
-
 const port = process.env.PORT ? Number(process.env.PORT) : 3000;
 
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
-
-// Handle cleanup on exit
-process.on('SIGINT', () => {
-  console.log('\nShutting down...');
-  process.exit(0);
-});
-
-    console.log('Processing image...');
-    const text = await tesseract.recognize(imagePath, config);
-    console.log('Recognition complete');
-
-    // Clean up temp file
-    if (imagePath && fs.existsSync(imagePath)) {
-      await unlink(imagePath);
-    }
-
-    return res.json({ text });
-
-  } catch (error: any) {
-    console.error('Error:', error);
-    
-    // Clean up temp file on error
-    if (imagePath && fs.existsSync(imagePath)) {
-      try {
-        await unlink(imagePath);
-      } catch (cleanupError) {
-        console.error('Error cleaning up temp file:', cleanupError);
-      }
-    }
-
-    return res.status(500).json({ 
-      error: error.message || 'An error occurred during text detection',
-      details: error.stack
-    });
-  }
-
-    console.log('Processing image...');
-    const text = await tesseract.recognize(imagePath, config);
-    console.log('Recognition complete');
-    
-    // Clean up temp file
-    require('fs').unlinkSync(imagePath);
-    
-    return res.json({ 
-      success: true,
-      text: text
-    });
-  } catch (error: any) {
-    console.error('Error:', error);
-    return res.status(500).json({ 
-      error: error instanceof Error ? error.message : String(error)
-    });
-  }
-});
-
-const port = process.env.PORT ? Number(process.env.PORT) : 3000;
 app.listen(port, () => {
   console.log(`OCR example server listening on http://localhost:${port}`);
 });
 
 // Graceful shutdown
 process.on('SIGINT', () => {
-  console.log('Shutting down...');
+  console.log('\nShutting down...');
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('\nShutting down...');
   process.exit(0);
 });

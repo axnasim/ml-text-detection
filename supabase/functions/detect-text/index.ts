@@ -31,14 +31,53 @@ Deno.serve(async (req: Request) => {
     // Parse request body
     const { imageUrl, imageBase64, jobId }: DetectionRequest = await req.json();
 
-    if (!jobId) {
+    // Validate input parameters
+    if (!jobId || typeof jobId !== 'string') {
       return new Response(
-        JSON.stringify({ error: "Job ID is required" }),
+        JSON.stringify({ error: "Valid Job ID is required" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
+    }
+
+    if (!imageUrl && !imageBase64) {
+      return new Response(
+        JSON.stringify({ error: "Either imageUrl or imageBase64 must be provided" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // Validate base64 image size (max 10MB when decoded)
+    if (imageBase64) {
+      const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+      const sizeInBytes = (base64Data.length * 3) / 4;
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      
+      if (sizeInBytes > maxSize) {
+        return new Response(
+          JSON.stringify({ error: "Image size exceeds 10MB limit" }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      // Validate base64 format
+      if (!/^[A-Za-z0-9+/]*={0,2}$/.test(base64Data)) {
+        return new Response(
+          JSON.stringify({ error: "Invalid base64 image format" }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
     }
 
     // Update job status to processing
@@ -136,8 +175,33 @@ Deno.serve(async (req: Request) => {
     // Store detected text in database
     const detectedTexts = [];
     
-    // First annotation is the full text, skip it and process individual words/phrases
-    for (let i = 0; i < textAnnotations.length; i++) {
+    // First annotation is the full text, store it separately
+    // Skip the first annotation (index 0) for individual text elements as it contains the full text
+    const fullTextAnnotation = textAnnotations[0];
+    
+    // Store the full text as the first entry
+    const fullTextData = {
+      job_id: jobId,
+      text_content: fullTextAnnotation.description,
+      confidence: fullTextAnnotation.confidence || 0.95,
+      bounding_box: fullTextAnnotation.boundingPoly?.vertices ? JSON.stringify(fullTextAnnotation.boundingPoly.vertices) : null,
+      language: fullTextAnnotation.locale || null,
+    };
+
+    const { data: fullTextResult, error: fullTextError } = await supabase
+      .from("detected_text")
+      .insert(fullTextData)
+      .select()
+      .single();
+
+    if (fullTextError) {
+      console.error("Error inserting full text:", fullTextError);
+    } else {
+      detectedTexts.push(fullTextResult);
+    }
+
+    // Process individual text elements (skip first annotation which is full text)
+    for (let i = 1; i < textAnnotations.length; i++) {
       const annotation = textAnnotations[i];
       const boundingBox = annotation.boundingPoly?.vertices || null;
       

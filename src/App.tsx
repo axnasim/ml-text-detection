@@ -10,6 +10,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [detections, setDetections] = useState<DetectedText[]>([]);
   const [jobId, setJobId] = useState<string | null>(null);
+  const [lastRequestTime, setLastRequestTime] = useState<number>(0);
 
   const handleImageSelect = async (data: string, file: File) => {
     setImageData(data);
@@ -20,6 +21,15 @@ function App() {
 
   const handleDetectText = async () => {
     if (!imageData) return;
+
+    // Rate limiting: prevent requests more frequent than every 2 seconds
+    const now = Date.now();
+    const minInterval = 2000; // 2 seconds
+    if (now - lastRequestTime < minInterval) {
+      setError('Please wait a moment before making another request');
+      return;
+    }
+    setLastRequestTime(now);
 
     setDetecting(true);
     setError(null);
@@ -78,7 +88,12 @@ function App() {
     }
   };
 
+  // The first detection contains the full text from GCP Vision API
+  // If no detections, show empty string
   const fullText = detections.length > 0 ? detections[0].text_content : '';
+  
+  // Individual text elements (excluding the first one which is full text)
+  const individualDetections = detections.length > 1 ? detections.slice(1) : [];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
@@ -147,7 +162,7 @@ function App() {
                 <p className="text-gray-600">Analyzing image with GCP Vision API...</p>
               </div>
             ) : detections.length > 0 || (jobId && !detecting) ? (
-              <DetectionResults detections={detections} fullText={fullText} />
+              <DetectionResults detections={individualDetections} fullText={fullText} />
             ) : (
               <div className="bg-white rounded-lg shadow-md p-12 text-center">
                 <FileSearch className="h-12 w-12 text-gray-400 mx-auto mb-4" />
