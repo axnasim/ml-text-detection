@@ -28,7 +28,8 @@ function App() {
       const { data: job, error: jobError } = await supabase
         .from('detection_jobs')
         .insert({
-          image_url: 'base64_image',
+          // Store the actual image reference submitted by the user
+          image_url: imageData,
           status: 'pending',
         })
         .select()
