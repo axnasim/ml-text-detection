@@ -1,4 +1,4 @@
-# Text-detection-gcp
+# Text-Detection-GCP
 
 A small demo app that detects text inside uploaded images using a serverless function (Google Cloud Functions) and a React + Vite frontend. The project shows a minimal end-to-end flow: image upload in the browser, server-side OCR/detection, and storing or surfacing results.
 
