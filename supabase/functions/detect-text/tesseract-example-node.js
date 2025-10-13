@@ -7,13 +7,16 @@ const fetch = require('node-fetch');
 const tesseract = require('node-tesseract-ocr');
 const fs = require('fs');
 const path = require('path');
+const cors = require('cors');
 const { promisify } = require('util');
 
 const writeFile = promisify(fs.writeFile);
 const unlink = promisify(fs.unlink);
 
 const app = express();
+app.use(cors()); // Enable CORS
 app.use(bodyParser.json({ limit: '10mb' }));
+app.use(express.static(path.join(__dirname, 'public'))); // Serve static files from 'public' directory
 
 // Supported image formats
 const SUPPORTED_FORMATS = ['image/png', 'image/jpeg', 'image/tiff', 'image/bmp'];
@@ -142,8 +145,14 @@ app.post('/detect', async (req, res) => {
 // Start the server
 const listenPort = process.env.PORT ? Number(process.env.PORT) : 3000;
 
+// Add a route for the web interface
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 app.listen(listenPort, () => {
   console.log(`Server running on port ${listenPort}`);
+  console.log(`Web interface available at http://localhost:${listenPort}`);
 });
 
 // Handle cleanup on exit
