@@ -88,7 +88,7 @@ ml-text-detection/
 
 ## Contact & Team
 
-- Maintainers: [@EngineeringLead](#), [@ProductManager](#)
+- Maintainers: [@Engineering](#), [@ProductManager](#)
 - Slack: #ml-text-detection  
 - Please reach out with questions or feature suggestions!
 
