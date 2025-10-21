@@ -1,0 +1,1 @@
+# Test text detection module

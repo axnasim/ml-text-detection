@@ -1,0 +1,1 @@
+# Test data loader for text detection tasks
