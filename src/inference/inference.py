@@ -1,0 +1,1 @@
+# run infererence on a single image or a folder of images

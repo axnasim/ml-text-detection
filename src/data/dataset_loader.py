@@ -1,0 +1,1 @@
+# Dataset loader for text detection tasks

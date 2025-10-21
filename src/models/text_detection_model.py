@@ -1,0 +1,1 @@
+# Text detection model implementation
